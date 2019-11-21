@@ -1,14 +1,35 @@
--- For each product in the database, calculate how many more orders where placed in 
--- each month compared to the previous month.
+WITH baseline AS (
+SELECT 
+*,
+LEAD (order_count, 1) OVER (PARTITION BY productid ORDER BY year DESC, month DESC) AS previous_month_order
+FROM 
+	(SELECT 
+		productid,
+		COUNT (DISTINCT orderid) AS order_count,
+		month,
+		year
+		FROM 
+			(SELECT
+			o.orderid,
+			od.productid,
+			od.unitprice,
+			od.quantity,
+			DATE_PART ('month', o.orderdate) AS month,
+			DATE_PART ('year', o.orderdate) AS year
+			FROM orders o 
+			INNER JOIN orderdetails od ON o.orderid = od.orderid
+			ORDER BY orderdate DESC) AS monthly_orders
+		GROUP BY year, month, productid
+		ORDER BY year DESC, month DESC) AS base
+)
 
--- IMPORTANT! This is going to be a 2-day warmup! FOR NOW, assume that each product
--- has sales every month. Do the calculations so that you're comparing to the previous 
--- month where there were sales.
--- For example, product_id #1 has no sales for October 1996. So compare November 1996
--- to September 1996 (the previous month where there were sales):
--- So if there were 27 units sold in November and 20 in September, the resulting 
--- difference should be 27-7 = 7.
--- (Later on we will work towards filling in the missing months.)
-
--- BIG HINT: Look at the expected results, how do you convert the dates to the 
--- correct format (year and month)?
+SELECT 
+p.productname,
+bl.productid,
+bl.order_count,
+bl.month,
+bl.year,
+bl.previous_month_order,
+COALESCE((order_count-previous_month_order),0) AS diff
+FROM baseline bl
+INNER JOIN products p ON p.productid = bl.productid
